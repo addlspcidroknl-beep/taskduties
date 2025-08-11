@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Google Sheet Viewer</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 0; }
+    .container { max-width: 1100px; margin: auto; padding: 20px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 10px; }
+    h1 { text-align: center; color: #333; margin-bottom: 15px; }
+    .search { padding: 10px; width: 100%; box-sizing: border-box; margin-bottom: 15px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
+    th { background: #4CAF50; color: white; cursor: pointer; position: sticky; top: 0; }
+    tr:nth-child(even) { background: #f2f2f2; }
+    .pagination { margin-top: 15px; display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; }
+    .pagination button { padding: 6px 12px; border: none; background: #4CAF50; color: white; cursor: pointer; border-radius: 5px; }
+    .pagination button.disabled { background: #ccc; cursor: not-allowed; }
+    .pagination button.active { background: #388E3C; }
+    @media(max-width: 768px) {
+      table, thead, tbody, th, td, tr { display: block; }
+      th { position: relative; padding-left: 50%; }
+      td { padding-left: 50%; border: none; border-bottom: 1px solid #ddd; }
+      tr { margin-bottom: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Google Sheet Viewer</h1>
+    <input id="searchBox" class="search" placeholder="Search...">
+    <div id="tableWrap">Loading data...</div>
+    <div class="pagination" id="pagination"></div>
+    <p style="text-align:center;font-size:12px;color:#777;">Auto-refreshes every 60 seconds</p>
+  </div>
+
+  <script>
+    const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
+    const GID = "1134492562";
+    const ROWS_PER_PAGE = 10;
+    const REFRESH_INTERVAL = 60000; // 60 seconds
+
+    let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
+
+    async function fetchSheet() {
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${GID}`;
+      const res = await fetch(url + "&t=" + Date.now()); // avoid caching
+      const text = await res.text();
+      const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+      cols = json.table.cols.map(c => c.label || "");
+      rows = json.table.rows.map(r => r.c.map(cell => cell ? cell.v : ""));
+      filteredRows = filterRows(document.getElementById('searchBox').value);
+      renderTable();
+      renderPagination();
+    }
+
+    function filterRows(searchTerm) {
+      if (!searchTerm) return [...rows];
+      return rows.filter(r => r.join(" ").toLowerCase().includes(searchTerm.toLowerCase()));
+    }
+
+    function renderTable() {
+      const tableWrap = document.getElementById('tableWrap');
+      const start = (currentPage - 1) * ROWS_PER_PAGE;
+      const end = start + ROWS_PER_PAGE;
+      const pageRows = filteredRows.slice(start, end);
+
+      const table = document.createElement('table');
+      const thead = table.createTHead();
+      const headRow = thead.insertRow();
+      cols.forEach((col, index) => {
+        const th = document.createElement('th');
+        th.textContent = col;
+        th.onclick = () => sortTable(index);
+        if (sortCol === index) th.textContent += sortAsc ? " ▲" : " ▼";
+        headRow.appendChild(th);
+      });
+
+      const tbody = table.createTBody();
+      pageRows.forEach(row => {
+        const tr = tbody.insertRow();
+        row.forEach(cell => {
+          const td = tr.insertCell();
+          td.textContent = cell;
+        });
+      });
+
+      tableWrap.innerHTML = "";
+      tableWrap.appendChild(table);
+    }
+
+    function renderPagination() {
+      const pagination = document.getElementById('pagination');
+      pagination.innerHTML = "";
+      const totalPages = Math.ceil(filteredRows.length / ROWS_PER_PAGE);
+
+      const prevBtn = document.createElement('button');
+      prevBtn.textContent = "Prev";
+      prevBtn.disabled = currentPage === 1;
+      prevBtn.className = prevBtn.disabled ? "disabled" : "";
+      prevBtn.onclick = () => { if (currentPage > 1) { currentPage--; renderTable(); renderPagination(); } };
+      pagination.appendChild(prevBtn);
+
+      for (let i = 1; i <= totalPages; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        if (i === currentPage) btn.className = "active";
+        btn.onclick = () => { currentPage = i; renderTable(); renderPagination(); };
+        pagination.appendChild(btn);
+      }
+
+      const nextBtn = document.createElement('button');
+      nextBtn.textContent = "Next";
+      nextBtn.disabled = currentPage === totalPages;
+      nextBtn.className = nextBtn.disabled ? "disabled" : "";
+      nextBtn.onclick = () => { if (currentPage < totalPages) { currentPage++; renderTable(); renderPagination(); } };
+      pagination.appendChild(nextBtn);
+    }
+
+    function sortTable(colIndex) {
+      sortAsc = (sortCol === colIndex) ? !sortAsc : true;
+      sortCol = colIndex;
+      filteredRows.sort((a, b) => {
+        if (a[colIndex] < b[colIndex]) return sortAsc ? -1 : 1;
+        if (a[colIndex] > b[colIndex]) return sortAsc ? 1 : -1;
+        return 0;
+      });
+      currentPage = 1;
+      renderTable();
+      renderPagination();
+    }
+
+    document.getElementById('searchBox').addEventListener('input', function() {
+      filteredRows = filterRows(this.value);
+      currentPage = 1;
+      renderTable();
+      renderPagination();
+    });
+
+    fetchSheet();
+    setInterval(fetchSheet, REFRESH_INTERVAL); // auto-refresh
+  </script>
+</body>
+</html>
