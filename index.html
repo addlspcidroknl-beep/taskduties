@@ -2,31 +2,56 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Google Sheet Dash Board Viewer</title>
+  <title>Google Sheet Dashboard: Tab & Employee VLOOKUP</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body { font-family: Arial, sans-serif; background: #f9f9f9; }
     .container { max-width: 1200px; margin: 40px auto; padding: 20px; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);}
     h1 { text-align: center; }
+    .controls { margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;}
+    select, button { font-size: 1em; padding: 8px; }
     table { border-collapse: collapse; width: 100%; margin-top: 20px; }
     th, td { border: 1px solid #bbb; padding: 8px; font-size: 15px; }
     th { background: #e6f2ff; }
     tr:nth-child(even) td { background: #f4f9fd; }
     #error { color: red; font-weight: bold; }
     .footer { text-align: center; margin: 20px 0 0 0; color: #888; font-size: 0.9em;}
-    .raw-value { color: #888; font-size: 0.9em; }
   </style>
 </head>
 <body>
 <div class="container">
-  <h1>Dash Board Tab (Display + Raw Values)</h1>
+  <h1>Google Sheet Dashboard</h1>
+  <div class="controls">
+    <label for="tabSelect">Choose Sheet Tab:</label>
+    <select id="tabSelect"></select>
+    <label for="nameSelect" id="nameLabel" style="display:none;">Employee:</label>
+    <select id="nameSelect" style="display:none;">
+      <option value="">Select Employee</option>
+    </select>
+    <button id="refreshBtn">Refresh</button>
+  </div>
   <div id="error"></div>
   <div id="sheetTable"></div>
-  <div class="footer">Only display and raw values can be shown; Google Sheets does not expose formulas via API.</div>
+  <div class="footer">Auto-refreshes every 60 seconds.<br>Employee filter available for Dash Board and similar tabs.</div>
 </div>
 <script>
 const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
-const DASHBOARD_GID = "1134492562";
+// List of all tabs and their GIDs. Add more as needed.
+const TABS = [
+  {name: "Dash Board", gid: "1134492562"},
+  {name: "PC & HCs", gid: "0"},
+  // Add more tabs as needed: {name: "AnotherTab", gid: "123456789"}
+];
+// The range for employee names in PC & HCs tab (for the dropdown)
+const NAME_RANGE = "PC & HCs!B2:B22";
+const REFRESH_INTERVAL = 60000;
+
+// Which columns to match for employee lookup (case-insensitive, trimmed)
+const EMPLOYEE_COL_HINTS = [
+  "name of the employee",
+  "employee name",
+  "name"
+];
 
 function setError(msg) {
   document.getElementById('error').innerText = msg || '';
@@ -35,46 +60,127 @@ function setTable(html) {
   document.getElementById('sheetTable').innerHTML = html || '';
 }
 
-async function fetchSheet() {
-  setError('');
-  setTable('Loading...');
+// Fetch all employee names from PC & HCs tab
+async function fetchEmployeeNames() {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${encodeURIComponent(NAME_RANGE)}&tqx=out:json&gid=0`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Employee fetch failed: " + res.status);
+    const text = await res.text();
+    const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    let values = json.table.rows.map(r => r.c[0] ? (r.c[0].f || r.c[0].v) : "").filter(Boolean);
+    values = [...new Set(values)];
+    return values;
+  } catch (e) {
+    setError("Employee dropdown error: " + e.message);
+    return [];
+  }
+}
+
+// Fetch data from any tab
+async function fetchSheet(gid) {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${gid}`;
     const res = await fetch(url + "&t=" + Date.now());
     const text = await res.text();
     if (!text.includes('table')) throw new Error("No table in response. Is the sheet published?");
     const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
     if (!json.table || !json.table.cols || !json.table.rows) throw new Error("Malformed table data.");
-
-    // Get column headers
     const cols = json.table.cols.map(c => c.label || "");
-    // Get row data: show both formatted and raw value
-    const rows = json.table.rows.map(r =>
-      r.c.map(cell => cell ?
-        `<div>${cell.f !== undefined ? cell.f : cell.v !== undefined ? cell.v : ""}</div>
-         <div class="raw-value">${cell.v !== undefined && cell.f !== cell.v ? "Raw: " + cell.v : ""}</div>`
-        : "<div></div>")
-    );
-
-    // Render table
-    let html = "<table><thead><tr>";
-    cols.forEach(col => { html += `<th>${col}</th>`; });
-    html += "</tr></thead><tbody>";
-    rows.forEach(row => {
-      html += "<tr>";
-      row.forEach(cell => { html += `<td>${cell}</td>`; });
-      html += "</tr>";
-    });
-    html += "</tbody></table>";
-    setTable(html);
+    const rows = json.table.rows.map(r => r.c.map(cell => cell ? (cell.f !== undefined ? cell.f : (cell.v !== undefined ? cell.v : "")) : ""));
+    return {cols, rows};
   } catch(e) {
-    setError("Error: " + e.message);
-    setTable('');
+    setError("Tab error: " + e.message);
+    return {cols:[], rows:[]};
   }
 }
 
-fetchSheet();
-setInterval(fetchSheet, 60000);
+// Find the employee column index in a tab
+function findEmployeeCol(cols) {
+  return cols.findIndex(c => {
+    const norm = (c || "").toString().trim().toLowerCase();
+    return EMPLOYEE_COL_HINTS.some(hint => norm === hint || norm.includes(hint));
+  });
+}
+
+// Render the table, optionally filtered by employee
+function renderTable(cols, rows, employeeName, employeeColIdx) {
+  if (employeeName && employeeColIdx >= 0) {
+    const normEmp = employeeName.trim().toLowerCase();
+    rows = rows.filter(r => (r[employeeColIdx]||"").toString().trim().toLowerCase() === normEmp);
+  }
+  if (!rows.length) {
+    setTable(`<p>No data found${employeeName ? " for selected employee." : "."}</p>`);
+    return;
+  }
+  let html = "<table><thead><tr>";
+  cols.forEach(col => { html += `<th>${col}</th>`; });
+  html += "</tr></thead><tbody>";
+  rows.forEach(row => {
+    html += "<tr>";
+    row.forEach(cell => { html += `<td>${cell}</td>`; });
+    html += "</tr>";
+  });
+  html += "</tbody></table>";
+  setTable(html);
+}
+
+// Main refresh logic
+async function refresh() {
+  setError('');
+  setTable('Loading...');
+  const gid = document.getElementById('tabSelect').value;
+  const tabName = TABS.find(t => t.gid === gid)?.name || "";
+  let employeeNames = [];
+  let showEmployeeDrop = false;
+  // Only show employee dropdown for Dash Board tab or tabs with employee data
+  if (tabName.toLowerCase().includes("dash board") || tabName.toLowerCase().includes("employee") || tabName.toLowerCase().includes("staff")) {
+    employeeNames = await fetchEmployeeNames();
+    showEmployeeDrop = true;
+  }
+  const {cols, rows} = await fetchSheet(gid);
+  // Try to find employee column
+  const employeeColIdx = findEmployeeCol(cols);
+  // Show the employee dropdown if relevant and if column found
+  const nameSelect = document.getElementById('nameSelect');
+  const nameLabel = document.getElementById('nameLabel');
+  if (showEmployeeDrop && employeeColIdx >= 0 && employeeNames.length) {
+    nameLabel.style.display = "";
+    nameSelect.style.display = "";
+    nameSelect.innerHTML = '<option value="">All Employees</option>' +
+      employeeNames.map(n => `<option value="${n}">${n}</option>`).join('');
+  } else {
+    nameLabel.style.display = "none";
+    nameSelect.style.display = "none";
+    nameSelect.innerHTML = '<option value="">Select Employee</option>';
+  }
+  // Get current selection
+  const selectedEmp = nameSelect.style.display === "none" ? "" : nameSelect.value;
+  renderTable(cols, rows, selectedEmp, employeeColIdx);
+}
+
+// Build tab selector
+function buildTabSelector() {
+  const sel = document.getElementById('tabSelect');
+  sel.innerHTML = '';
+  TABS.forEach(tab => {
+    const opt = document.createElement('option');
+    opt.value = tab.gid;
+    opt.textContent = tab.name;
+    sel.appendChild(opt);
+  });
+}
+
+document.getElementById('refreshBtn').addEventListener('click', refresh);
+document.getElementById('tabSelect').addEventListener('change', () => {
+  document.getElementById('nameSelect').selectedIndex = 0;
+  refresh();
+});
+document.getElementById('nameSelect').addEventListener('change', refresh);
+
+buildTabSelector();
+refresh();
+setInterval(refresh, REFRESH_INTERVAL);
 </script>
 </body>
 </html>
