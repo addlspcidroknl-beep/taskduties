@@ -1,15 +1,74 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Task Duties Dashboard</title>
-  <style>
-    body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 0; }
-    .container { max-width: 1100px; margin: auto; padding: 20px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 10px; }
-    h1 { text-align: center; color: #333; margin-bottom: 15px; }
-    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
-    select, .search { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
-    .search { flex: 1; min-width: 200px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #ddd; padding:
+# Task Duties Dashboard – GitHub Deployment Guide
+
+This guide helps you deploy the Task Duties Dashboard (from `index.html`) on GitHub Pages, using data from your Google Sheets.
+
+## How It Works
+
+The dashboard (`index.html`) fetches data from your Google Sheet using the public [Google Visualization API](https://developers.google.com/chart/interactive/docs/reference#methods) for Sheets. No server-side code or API keys are required; all fetching is done client-side via JavaScript.
+
+## Prerequisites
+
+- **Google Sheet must be published to the web** and accessible to anyone with the link.
+- **Sheet ID:** `1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw`
+- **Dashboard GID:** `1134492562`
+- **Dropdown GID:** `0`
+- **Range for dropdown:** `PC & HCs!B2:B22`
+
+## Steps
+
+### 1. Prepare Your Google Sheet
+
+1. Open your Google Sheet.
+2. Go to `File` > `Share` > `Publish to web`.
+   - Publish the entire sheet or the relevant tabs.
+3. Ensure **anyone with the link can view** (not just restricted users).
+
+### 2. Deploy to GitHub Pages
+
+1. **Add `index.html` to your repository root** (already present).
+2. **Enable GitHub Pages:**
+   - Go to your repository's `Settings` > `Pages`.
+   - Set source to `main` (or your default branch) and `/root` (if `index.html` is in the root).
+   - Save. Your site will be available at `https://{your-username}.github.io/{repo-name}/`.
+
+### 3. No API Key Needed
+
+- The script works by requesting data from the URLs:
+  - For dropdown:  
+    `https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?range={NAME_RANGE}&tqx=out:json&gid={PCHC_GID}`
+  - For dashboard:  
+    `https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:json&gid={DASHBOARD_GID}`
+
+- The Sheet must be **public**.
+
+### 4. Troubleshooting
+
+- **Dropdown not loading / table not showing:**  
+  Ensure the Sheet is published and public.  
+  Try opening the fetch URLs in your browser; you should see a JSON response.
+
+- **Data not updating:**  
+  The dashboard auto-refreshes every 60 seconds. Manual sheet changes will reflect on next refresh.
+
+- **CORS Issues:**  
+  Google's Visualization API supports cross-origin requests for public sheets.
+
+## Customization
+
+- **Column names / data structure:**  
+  Change your Sheet columns and the dashboard will adapt automatically.
+- **Dropdown range:**  
+  Adjust the `NAME_RANGE` variable in the script if employee names move.
+
+## Security Note
+
+- All data is fetched client-side. Anyone viewing the dashboard can see the sheet data.
+- Do not publish sensitive information.
+
+## Example
+
+Visit your dashboard at:  
+`https://addlspcidroknl-beep.github.io/taskduties/`
+
+---
+**Enjoy your auto-updating dashboard powered by Google Sheets + GitHub Pages!**
