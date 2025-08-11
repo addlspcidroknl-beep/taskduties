@@ -5,7 +5,22 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Task Duties Dashboard</title>
   <style>
-    /* ... your styles unchanged ... */
+    body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 0; }
+    .container { max-width: 1100px; margin: auto; padding: 20px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 10px; }
+    h1 { text-align: center; color: #333; margin-bottom: 15px; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
+    select, .search { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
+    .search { flex: 1; min-width: 200px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
+    th { background: #4CAF50; color: white; cursor: pointer; position: sticky; top: 0; }
+    tr:nth-child(even) { background: #f2f2f2; }
+    .pagination { margin-top: 15px; display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; }
+    .pagination button { padding: 6px 12px; border: none; background: #4CAF50; color: white; cursor: pointer; border-radius: 5px; }
+    .pagination button.disabled { background: #ccc; cursor: not-allowed; }
+    .pagination button.active { background: #388E3C; }
+    #tableWrap { display: none; }
+    #pagination { display: none; }
   </style>
 </head>
 <body>
@@ -24,15 +39,38 @@
 
   <script>
     const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
-    const EMPLOYEE_GID = "701335861"; // <== NEW: The sheet/tab containing the correct employee names
+    const DASHBOARD_GID = "1134492562"; // Dashboard tab (for main table)
+    const PCHC_GID = "0"; // 'PC & HCs' sheet gid
+    const NAME_RANGE = "B2:B22"; // Range for dropdown
     const ROWS_PER_PAGE = 10;
     const REFRESH_INTERVAL = 60000;
 
     let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
 
-    // Fetch all data from the correct sheet/tab for both the dropdown and table
+    // Fetch employee names from 'PC & HCs' sheet, B2:B22
+    async function fetchDropdown() {
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${NAME_RANGE}&tqx=out:json&gid=${PCHC_GID}`;
+      const res = await fetch(url + "&t=" + Date.now());
+      const text = await res.text();
+      const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+      let values = json.table.rows.map(r => r.c[0] ? (r.c[0].f || r.c[0].v) : "").filter(Boolean);
+
+      // Remove duplicates and trim spaces
+      values = [...new Set(values.map(v => v.trim()))];
+
+      const select = document.getElementById('nameFilter');
+      select.innerHTML = '<option value="">Select Employee</option>';
+      values.forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val;
+        select.appendChild(opt);
+      });
+    }
+
+    // Fetch main dashboard data for table display
     async function fetchSheet() {
-      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${EMPLOYEE_GID}`;
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
       const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
       const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
@@ -44,25 +82,8 @@
       }));
     }
 
-    // Populate dropdown using the correct column (e.g., 'Name')
-    function populateDropdown() {
-      const nameIndex = cols.findIndex(c => c.toLowerCase().includes("name"));
-      if (nameIndex === -1) return;
-      let names = rows.map(r => r[nameIndex]).filter(Boolean);
-      names = [...new Set(names)]; // Remove duplicates
-
-      const select = document.getElementById('nameFilter');
-      select.innerHTML = '<option value="">Select Employee</option>';
-      names.forEach(val => {
-        const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = val;
-        select.appendChild(opt);
-      });
-    }
-
     function applyFilters() {
-      const selectedName = document.getElementById('nameFilter').value;
+      const selectedName = document.getElementById('nameFilter').value.trim();
       const searchTerm = document.getElementById('searchBox').value.toLowerCase();
       const nameIndex = cols.findIndex(c => c.toLowerCase().includes("name"));
 
@@ -74,7 +95,8 @@
       }
 
       filteredRows = rows.filter(r => {
-        const matchesName = r[nameIndex] === selectedName;
+        // Match name (trim and case insensitive)
+        const matchesName = r[nameIndex] && r[nameIndex].trim().toLowerCase() === selectedName.toLowerCase();
         const matchesSearch = !searchTerm || r.join(" ").toLowerCase().includes(searchTerm);
         return matchesName && matchesSearch;
       });
@@ -140,7 +162,7 @@
 
       const nextBtn = document.createElement('button');
       nextBtn.textContent = "Next";
-      nextBtn.disabled = currentPage === totalPages;
+      nextBtn.disabled = currentPage === totalPages || totalPages === 0;
       nextBtn.className = nextBtn.disabled ? "disabled" : "";
       nextBtn.onclick = () => { if (currentPage < totalPages) { currentPage++; renderTable(); renderPagination(); } };
       pagination.appendChild(nextBtn);
@@ -163,8 +185,8 @@
     document.getElementById('nameFilter').addEventListener('change', applyFilters);
 
     async function init() {
+      await fetchDropdown();
       await fetchSheet();
-      populateDropdown();
     }
 
     init();
