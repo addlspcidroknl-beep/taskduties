@@ -52,13 +52,22 @@
     <p style="text-align:center;font-size:12px;color:#777;">Auto-refreshes every 60 seconds</p>
   </div>
   <script>
+    // Spreadsheet and tab info (Sheet Name: gid)
     const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
-    const DASHBOARD_GID = "1134492562"; // Dashboard tab
-    const PC_HC_GID = "0"; // PC & HCs tab
-    const A3_RANGE = "A3:A3"; // Dashboard!A3
-    const NAME_RANGE = "B2:B22"; // PC & HCs!B2:B22
+    const SHEETS = {
+      "Dashboard":      { name: "Dashboard", gid: "1134492562" },
+      "PC_HCs":         { name: "PC & HCs",  gid: "0" },
+      "Tappal":         { name: "Tappal",    gid: "1817585752" },
+      "SIs":            { name: "SIs",       gid: "701335861" }
+    };
+
+    // Ranges
+    const DASHBOARD_A3_RANGE = "A3:A3";                       // Dashboard!A3
+    const PC_HCs_NAME_RANGE = "B2:B22";                       // PC & HCs!B2:B22
+
     const ROWS_PER_PAGE = 10;
     const REFRESH_INTERVAL = 60000;
+
     // Only allow these names in dropdown:
     const allowedNames = [
       "Syed Naseeruddin Peer","B.Venu Gopal","R. Priya Kumar","K.V. Ranga Reddy","S. Abdul Alam","M. Eswaraiah",
@@ -70,7 +79,7 @@
 
     // Fetch Dashboard!A3 (employee name)
     async function fetchEmployeeNameA3() {
-      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${A3_RANGE}&tqx=out:json&gid=${DASHBOARD_GID}`;
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${DASHBOARD_A3_RANGE}&tqx=out:json&gid=${SHEETS.Dashboard.gid}`;
       const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
       const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
@@ -80,7 +89,7 @@
 
     // Fetch PC & HCs!B2:B22 for dropdown (Dashboard!A4)
     async function fetchEmployeeDropdownA4() {
-      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${NAME_RANGE}&tqx=out:json&gid=${PC_HC_GID}`;
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${PC_HCs_NAME_RANGE}&tqx=out:json&gid=${SHEETS.PC_HCs.gid}`;
       const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
       const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
@@ -103,7 +112,7 @@
 
     // Fetch all Dashboard tab data for table
     async function fetchDashboardData() {
-      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEETS.Dashboard.gid}`;
       const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
       const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
