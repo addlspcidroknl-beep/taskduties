@@ -46,6 +46,7 @@
     const REFRESH_INTERVAL = 60000;
 
     let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
+    let allRows = [], allCols = [];
 
     async function fetchDropdown() {
       const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${encodeURIComponent(NAME_RANGE)}&tqx=out:json&gid=${PCHC_GID}`;
@@ -78,6 +79,10 @@
         if (!cell) return "";
         return cell.f ? cell.f : cell.v;
       }));
+
+      // Save for re-filtering
+      allCols = [...cols];
+      allRows = [...rows];
     }
 
     function applyFilters() {
@@ -187,7 +192,10 @@
     }
 
     init();
-    setInterval(init, REFRESH_INTERVAL);
+    setInterval(async () => {
+      await fetchSheet();
+      applyFilters();
+    }, REFRESH_INTERVAL);
   </script>
 </body>
 </html>
