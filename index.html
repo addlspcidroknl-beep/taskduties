@@ -40,15 +40,15 @@
   <script>
     const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
     const DASHBOARD_GID = "1134492562"; // Dashboard tab
-    const PCHC_GID = "0"; // 'PC & HCs' sheet gid
-    const NAME_RANGE = "B2:B22"; // Range for dropdown
+    const PCHC_GID = "0"; // 'PC & HCs' tab GID
+    const NAME_RANGE = "PC & HCs!B2:B22"; // Range for dropdown from PC & HCs tab
     const ROWS_PER_PAGE = 10;
     const REFRESH_INTERVAL = 60000;
 
     let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
 
     async function fetchDropdown() {
-      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${NAME_RANGE}&tqx=out:json&gid=${PCHC_GID}`;
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${encodeURIComponent(NAME_RANGE)}&tqx=out:json&gid=${PCHC_GID}`;
       const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
       const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
