@@ -19,8 +19,8 @@
     .pagination button { padding: 6px 12px; border: none; background: #4CAF50; color: white; cursor: pointer; border-radius: 5px; }
     .pagination button.disabled { background: #ccc; cursor: not-allowed; }
     .pagination button.active { background: #388E3C; }
-    #tableWrap { display: none; } /* Hidden until name selected */
-    #pagination { display: none; } /* Hidden until name selected */
+    #tableWrap { display: none; }
+    #pagination { display: none; }
   </style>
 </head>
 <body>
@@ -40,7 +40,7 @@
   <script>
     const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
     const DASHBOARD_GID = "1134492562"; // Dashboard tab
-    const PCHC_GID = "0"; // 'PC & HCs' sheet gid (likely 0)
+    const PCHC_GID = "0"; // 'PC & HCs' sheet gid
     const NAME_RANGE = "B2:B22"; // Range for dropdown
     const ROWS_PER_PAGE = 10;
     const REFRESH_INTERVAL = 60000;
@@ -52,7 +52,10 @@
       const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
       const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
-      const values = json.table.rows.map(r => r.c[0] ? (r.c[0].f || r.c[0].v) : "").filter(Boolean);
+      let values = json.table.rows.map(r => r.c[0] ? (r.c[0].f || r.c[0].v) : "").filter(Boolean);
+
+      // Remove duplicates
+      values = [...new Set(values)];
 
       const select = document.getElementById('nameFilter');
       select.innerHTML = '<option value="">Select Employee</option>';
