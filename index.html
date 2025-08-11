@@ -26,7 +26,7 @@
     <h1>Task Duties Dashboard</h1>
     <div class="controls">
       <select id="nameFilter">
-        <option value="">All Names</option>
+        <option value="">All Employees</option>
       </select>
       <input id="searchBox" class="search" placeholder="Search...">
     </div>
@@ -60,11 +60,11 @@
     }
 
     function populateNameDropdown() {
-      const nameIndex = cols.findIndex(c => c.toLowerCase() === "name");
+      const nameIndex = cols.findIndex(c => c.toLowerCase().includes("name"));
       if (nameIndex === -1) return;
       const names = [...new Set(rows.map(r => r[nameIndex]).filter(Boolean))].sort();
       const select = document.getElementById('nameFilter');
-      select.innerHTML = '<option value="">All Names</option>';
+      select.innerHTML = '<option value="">All Employees</option>';
       names.forEach(name => {
         const opt = document.createElement('option');
         opt.value = name;
@@ -76,7 +76,7 @@
     function applyFilters() {
       const searchTerm = document.getElementById('searchBox').value.toLowerCase();
       const selectedName = document.getElementById('nameFilter').value;
-      const nameIndex = cols.findIndex(c => c.toLowerCase() === "name");
+      const nameIndex = cols.findIndex(c => c.toLowerCase().includes("name"));
 
       filteredRows = rows.filter(r => {
         const matchesName = !selectedName || r[nameIndex] === selectedName;
