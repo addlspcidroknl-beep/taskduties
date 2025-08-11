@@ -8,7 +8,9 @@
     body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 0; }
     .container { max-width: 1100px; margin: auto; padding: 20px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 10px; }
     h1 { text-align: center; color: #333; margin-bottom: 15px; }
-    .search { padding: 10px; width: 100%; box-sizing: border-box; margin-bottom: 15px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
+    select, .search { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
+    .search { flex: 1; min-width: 200px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
     th { background: #4CAF50; color: white; cursor: pointer; position: sticky; top: 0; }
@@ -17,18 +19,17 @@
     .pagination button { padding: 6px 12px; border: none; background: #4CAF50; color: white; cursor: pointer; border-radius: 5px; }
     .pagination button.disabled { background: #ccc; cursor: not-allowed; }
     .pagination button.active { background: #388E3C; }
-    @media(max-width: 768px) {
-      table, thead, tbody, th, td, tr { display: block; }
-      th { position: relative; padding-left: 50%; }
-      td { padding-left: 50%; border: none; border-bottom: 1px solid #ddd; }
-      tr { margin-bottom: 10px; }
-    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Task Duties Dashboard</h1>
-    <input id="searchBox" class="search" placeholder="Search...">
+    <div class="controls">
+      <select id="nameFilter">
+        <option value="">All Names</option>
+      </select>
+      <input id="searchBox" class="search" placeholder="Search...">
+    </div>
     <div id="tableWrap">Loading data...</div>
     <div class="pagination" id="pagination"></div>
     <p style="text-align:center;font-size:12px;color:#777;">Auto-refreshes every 60 seconds</p>
@@ -36,7 +37,7 @@
 
   <script>
     const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
-    const GID = "1134492562";
+    const GID = "1134492562"; // Dashboard sheet tab
     const ROWS_PER_PAGE = 10;
     const REFRESH_INTERVAL = 60000; // 60 seconds
 
@@ -44,19 +45,42 @@
 
     async function fetchSheet() {
       const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${GID}`;
-      const res = await fetch(url + "&t=" + Date.now()); // avoid caching
+      const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
       const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
       cols = json.table.cols.map(c => c.label || "");
       rows = json.table.rows.map(r => r.c.map(cell => cell ? cell.v : ""));
-      filteredRows = filterRows(document.getElementById('searchBox').value);
-      renderTable();
-      renderPagination();
+      populateNameDropdown();
+      applyFilters();
     }
 
-    function filterRows(searchTerm) {
-      if (!searchTerm) return [...rows];
-      return rows.filter(r => r.join(" ").toLowerCase().includes(searchTerm.toLowerCase()));
+    function populateNameDropdown() {
+      const nameIndex = cols.findIndex(c => c.toLowerCase() === "name");
+      if (nameIndex === -1) return; 
+      const names = [...new Set(rows.map(r => r[nameIndex]).filter(Boolean))].sort();
+      const select = document.getElementById('nameFilter');
+      select.innerHTML = '<option value="">All Names</option>';
+      names.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+      });
+    }
+
+    function applyFilters() {
+      const searchTerm = document.getElementById('searchBox').value.toLowerCase();
+      const selectedName = document.getElementById('nameFilter').value;
+      const nameIndex = cols.findIndex(c => c.toLowerCase() === "name");
+
+      filteredRows = rows.filter(r => {
+        const matchesName = !selectedName || r[nameIndex] === selectedName;
+        const matchesSearch = !searchTerm || r.join(" ").toLowerCase().includes(searchTerm);
+        return matchesName && matchesSearch;
+      });
+      currentPage = 1;
+      renderTable();
+      renderPagination();
     }
 
     function renderTable() {
@@ -130,15 +154,11 @@
       renderPagination();
     }
 
-    document.getElementById('searchBox').addEventListener('input', function() {
-      filteredRows = filterRows(this.value);
-      currentPage = 1;
-      renderTable();
-      renderPagination();
-    });
+    document.getElementById('searchBox').addEventListener('input', applyFilters);
+    document.getElementById('nameFilter').addEventListener('change', applyFilters);
 
     fetchSheet();
-    setInterval(fetchSheet, REFRESH_INTERVAL); // auto-refresh
+    setInterval(fetchSheet, REFRESH_INTERVAL);
   </script>
 </body>
 </html>
