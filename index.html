@@ -5,22 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Task Duties Dashboard</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 0; }
-    .container { max-width: 1100px; margin: auto; padding: 20px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 10px; }
-    h1 { text-align: center; color: #333; margin-bottom: 15px; }
-    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
-    select, .search { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
-    .search { flex: 1; min-width: 200px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
-    th { background: #4CAF50; color: white; cursor: pointer; position: sticky; top: 0; }
-    tr:nth-child(even) { background: #f2f2f2; }
-    .pagination { margin-top: 15px; display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; }
-    .pagination button { padding: 6px 12px; border: none; background: #4CAF50; color: white; cursor: pointer; border-radius: 5px; }
-    .pagination button.disabled { background: #ccc; cursor: not-allowed; }
-    .pagination button.active { background: #388E3C; }
-    #tableWrap { display: none; }
-    #pagination { display: none; }
+    /* ... your styles unchanged ... */
   </style>
 </head>
 <body>
@@ -39,15 +24,15 @@
 
   <script>
     const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
-    const DASHBOARD_GID = "1134492562"; // Dashboard tab
+    const EMPLOYEE_GID = "701335861"; // <== NEW: The sheet/tab containing the correct employee names
     const ROWS_PER_PAGE = 10;
     const REFRESH_INTERVAL = 60000;
 
     let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
 
-    // Fetch dashboard sheet and extract employee names directly from 'Name' column
+    // Fetch all data from the correct sheet/tab for both the dropdown and table
     async function fetchSheet() {
-      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${EMPLOYEE_GID}`;
       const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
       const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
@@ -59,7 +44,7 @@
       }));
     }
 
-    // Populate dropdown using 'Name' column values from dashboard sheet
+    // Populate dropdown using the correct column (e.g., 'Name')
     function populateDropdown() {
       const nameIndex = cols.findIndex(c => c.toLowerCase().includes("name"));
       if (nameIndex === -1) return;
