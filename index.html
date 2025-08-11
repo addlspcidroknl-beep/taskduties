@@ -39,15 +39,15 @@
 
   <script>
     const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
-    const DASHBOARD_GID = "1134492562"; // Dashboard tab
+    const DASHBOARD_GID = "1134492562"; // Dash Board tab
     const PCHC_GID = "0"; // 'PC & HCs' tab GID
     const NAME_RANGE = "PC & HCs!B2:B22"; // Range for dropdown from PC & HCs tab
     const ROWS_PER_PAGE = 10;
     const REFRESH_INTERVAL = 60000;
 
     let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
-    let allRows = [], allCols = [];
 
+    // Fetch dropdown values from PC & HCs tab B2:B22
     async function fetchDropdown() {
       const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${encodeURIComponent(NAME_RANGE)}&tqx=out:json&gid=${PCHC_GID}`;
       const res = await fetch(url + "&t=" + Date.now());
@@ -68,23 +68,21 @@
       });
     }
 
+    // Fetch ALL Dash Board tab data as-is
     async function fetchSheet() {
       const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
       const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
       const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
-
       cols = json.table.cols.map(c => c.label || "");
       rows = json.table.rows.map(r => r.c.map(cell => {
         if (!cell) return "";
-        return cell.f ? cell.f : cell.v;
+        // Use .v for raw value (as in vlookup, no formatting)
+        return cell.v;
       }));
-
-      // Save for re-filtering
-      allCols = [...cols];
-      allRows = [...rows];
     }
 
+    // VLOOKUP-like filter: Show Dash Board rows where Name matches selected dropdown value
     function applyFilters() {
       const selectedName = document.getElementById('nameFilter').value;
       const searchTerm = document.getElementById('searchBox').value.toLowerCase();
