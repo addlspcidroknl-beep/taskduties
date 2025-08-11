@@ -1,178 +1,96 @@
-<script>
-const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
-const DASHBOARD_GID = "1134492562"; // Dash Board tab GID
-const PCHC_GID = "0"; // PC & HCs tab GID (change if this is not your PC & HCs tab!)
-const NAME_RANGE = "PC & HCs!B2:B22";
-const ROWS_PER_PAGE = 10;
-const REFRESH_INTERVAL = 60000;
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Task Duties Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f9f9f9; }
+    .container { max-width: 700px; margin: auto; padding: 20px; background: #fff; margin-top: 40px; border-radius: 10px; }
+    #status { color: red; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Task Duties Dashboard</h1>
+    <div id="status"></div>
+    <select id="nameFilter"><option value="">Loading...</option></select>
+    <div id="tableWrap"></div>
+  </div>
+  <script>
+    const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
+    const DASHBOARD_GID = "1134492562";
+    const PCHC_GID = "0";
+    const NAME_RANGE = "PC & HCs!B2:B22";
 
-let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
-let dropdownReady = false, sheetReady = false;
-let selectedName = "";
-
-function normalizeName(name) {
-  return (name || "").toString().trim().toLowerCase();
-}
-
-async function fetchDropdown() {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${encodeURIComponent(NAME_RANGE)}&tqx=out:json&gid=${PCHC_GID}`;
-  try {
-    const res = await fetch(url + "&t=" + Date.now());
-    const text = await res.text();
-    const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
-    let values = json.table.rows.map(r => r.c[0] ? (r.c[0].f || r.c[0].v) : "").filter(Boolean);
-    values = [...new Set(values)];
-    const select = document.getElementById('nameFilter');
-    select.innerHTML = '<option value="">Select Employee</option>';
-    values.forEach(val => {
-      const opt = document.createElement('option');
-      opt.value = val;
-      opt.textContent = val;
-      select.appendChild(opt);
-    });
-    dropdownReady = true;
-  } catch (e) {
-    document.getElementById('tableWrap').innerText = 'Error loading dropdown!';
-    dropdownReady = false;
-  }
-}
-
-async function fetchSheet() {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
-  try {
-    const res = await fetch(url + "&t=" + Date.now());
-    const text = await res.text();
-    const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
-    cols = json.table.cols.map(c => c.label || "");
-    rows = json.table.rows.map(r => r.c.map(cell => {
-      if (!cell) return "";
-      return cell.f !== undefined ? cell.f : (cell.v !== undefined ? cell.v : "");
-    }));
-    sheetReady = true;
-  } catch (e) {
-    document.getElementById('tableWrap').innerText = 'Error loading dashboard!';
-    sheetReady = false;
-  }
-}
-
-function applyFilters() {
-  if (!dropdownReady || !sheetReady) return;
-  selectedName = document.getElementById('nameFilter').value;
-  const searchTerm = document.getElementById('searchBox').value.toLowerCase();
-
-  // Find the name column index (case-insensitive, trims)
-  let nameIndex = cols.findIndex(c => normalizeName(c) === "name");
-  if (nameIndex === -1) {
-    // fallback: look for the column containing 'name'
-    nameIndex = cols.findIndex(c => normalizeName(c).includes("name"));
-    if (nameIndex === -1) {
-      document.getElementById('tableWrap').innerText = 'No "Name" column found in Dash Board tab!';
-      document.getElementById('tableWrap').style.display = "block";
-      document.getElementById('pagination').style.display = "none";
-      return;
+    function showStatus(msg) {
+      document.getElementById('status').innerText = msg;
     }
-  }
 
-  if (!selectedName) {
-    document.getElementById('tableWrap').style.display = "none";
-    document.getElementById('pagination').style.display = "none";
-    document.getElementById('searchBox').disabled = true;
-    return;
-  }
+    async function fetchDropdown() {
+      try {
+        const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${encodeURIComponent(NAME_RANGE)}&tqx=out:json&gid=${PCHC_GID}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Dropdown fetch failed: " + res.status);
+        const text = await res.text();
+        if (!text.includes('table')) throw new Error("Dropdown response missing table");
+        const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+        let values = json.table.rows.map(r => r.c[0] ? (r.c[0].f || r.c[0].v) : "").filter(Boolean);
+        values = [...new Set(values)];
+        const select = document.getElementById('nameFilter');
+        select.innerHTML = '<option value="">Select Employee</option>';
+        values.forEach(val => {
+          const opt = document.createElement('option');
+          opt.value = val;
+          opt.textContent = val;
+          select.appendChild(opt);
+        });
+        showStatus('');
+      } catch (e) {
+        showStatus("Dropdown error: " + e.message);
+      }
+    }
 
-  const normalizedSelected = normalizeName(selectedName);
-  filteredRows = rows.filter(r => {
-    const matchesName = normalizeName(r[nameIndex]) === normalizedSelected;
-    const matchesSearch = !searchTerm || r.join(" ").toLowerCase().includes(searchTerm);
-    return matchesName && matchesSearch;
-  });
+    async function fetchSheet(selectedName) {
+      try {
+        const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Sheet fetch failed: " + res.status);
+        const text = await res.text();
+        if (!text.includes('table')) throw new Error("Sheet response missing table");
+        const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+        const cols = json.table.cols.map(c => c.label || "");
+        const rows = json.table.rows.map(r => r.c.map(cell => cell ? (cell.f || cell.v || "") : ""));
+        const nameIndex = cols.findIndex(c => c.trim().toLowerCase() === "name");
+        if (nameIndex === -1) throw new Error("No 'Name' column found in Dash Board tab");
+        const filtered = rows.filter(r => r[nameIndex] && r[nameIndex].trim().toLowerCase() === selectedName.trim().toLowerCase());
+        renderTable(cols, filtered);
+        showStatus('');
+      } catch (e) {
+        showStatus("Dashboard error: " + e.message);
+        document.getElementById('tableWrap').innerHTML = "";
+      }
+    }
 
-  document.getElementById('tableWrap').style.display = "block";
-  document.getElementById('pagination').style.display = "flex";
-  document.getElementById('searchBox').disabled = false;
-  currentPage = 1;
-  renderTable();
-  renderPagination();
-}
+    function renderTable(cols, rows) {
+      if (!rows.length) {
+        document.getElementById('tableWrap').innerHTML = "<p>No data found for selected employee.</p>";
+        return;
+      }
+      let html = "<table border='1' cellpadding='4'><tr>" + cols.map(c => `<th>${c}</th>`).join('') + "</tr>";
+      rows.forEach(row => {
+        html += "<tr>" + row.map(cell => `<td>${cell}</td>`).join('') + "</tr>";
+      });
+      html += "</table>";
+      document.getElementById('tableWrap').innerHTML = html;
+    }
 
-function renderTable() {
-  const tableWrap = document.getElementById('tableWrap');
-  if (!filteredRows.length) {
-    tableWrap.innerHTML = `<p>No data found for selected employee.<br>Check spelling, spaces, and that the Name column exists in your Dash Board tab.</p>`;
-    return;
-  }
-  const start = (currentPage - 1) * ROWS_PER_PAGE;
-  const end = start + ROWS_PER_PAGE;
-  const pageRows = filteredRows.slice(start, end);
-  const table = document.createElement('table');
-  const thead = table.createTHead();
-  const headRow = thead.insertRow();
-  cols.forEach((col, index) => {
-    const th = document.createElement('th');
-    th.textContent = col;
-    th.onclick = () => sortTable(index);
-    if (sortCol === index) th.textContent += sortAsc ? " ▲" : " ▼";
-    headRow.appendChild(th);
-  });
-  const tbody = table.createTBody();
-  pageRows.forEach(row => {
-    const tr = tbody.insertRow();
-    row.forEach(cell => {
-      const td = tr.insertCell();
-      td.textContent = cell;
+    document.getElementById('nameFilter').addEventListener('change', function() {
+      const val = this.value;
+      if (val) fetchSheet(val);
+      else document.getElementById('tableWrap').innerHTML = "";
     });
-  });
-  tableWrap.innerHTML = "";
-  tableWrap.appendChild(table);
-}
 
-function renderPagination() {
-  const pagination = document.getElementById('pagination');
-  pagination.innerHTML = "";
-  const totalPages = Math.ceil(filteredRows.length / ROWS_PER_PAGE);
-  const prevBtn = document.createElement('button');
-  prevBtn.textContent = "Prev";
-  prevBtn.disabled = currentPage === 1;
-  prevBtn.className = prevBtn.disabled ? "disabled" : "";
-  prevBtn.onclick = () => { if (currentPage > 1) { currentPage--; renderTable(); renderPagination(); } };
-  pagination.appendChild(prevBtn);
-  for (let i = 1; i <= totalPages; i++) {
-    const btn = document.createElement('button');
-    btn.textContent = i;
-    if (i === currentPage) btn.className = "active";
-    btn.onclick = () => { currentPage = i; renderTable(); renderPagination(); };
-    pagination.appendChild(btn);
-  }
-  const nextBtn = document.createElement('button');
-  nextBtn.textContent = "Next";
-  nextBtn.disabled = currentPage === totalPages;
-  nextBtn.className = nextBtn.disabled ? "disabled" : "";
-  nextBtn.onclick = () => { if (currentPage < totalPages) { currentPage++; renderTable(); renderPagination(); } };
-  pagination.appendChild(nextBtn);
-}
-
-function sortTable(colIndex) {
-  sortAsc = (sortCol === colIndex) ? !sortAsc : true;
-  sortCol = colIndex;
-  filteredRows.sort((a, b) => {
-    if (a[colIndex] < b[colIndex]) return sortAsc ? -1 : 1;
-    if (a[colIndex] > b[colIndex]) return sortAsc ? 1 : -1;
-    return 0;
-  });
-  currentPage = 1;
-  renderTable();
-  renderPagination();
-}
-
-document.getElementById('searchBox').addEventListener('input', applyFilters);
-document.getElementById('nameFilter').addEventListener('change', applyFilters);
-
-async function init() {
-  await fetchDropdown();
-  await fetchSheet();
-  applyFilters();
-}
-
-init();
-setInterval(init, REFRESH_INTERVAL);
-</script>
+    fetchDropdown();
+  </script>
+</body>
+</html>
