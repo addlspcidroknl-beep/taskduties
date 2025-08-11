@@ -8,9 +8,10 @@
     body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 0; }
     .container { max-width: 1100px; margin: auto; padding: 20px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 10px; }
     h1 { text-align: center; color: #333; margin-bottom: 15px; }
-    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; align-items: center; }
     select, .search { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
     .search { flex: 1; min-width: 200px; }
+    .label { font-weight: bold; margin-right: 8px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
     th { background: #4CAF50; color: white; cursor: pointer; position: sticky; top: 0; }
@@ -21,15 +22,30 @@
     .pagination button.active { background: #388E3C; }
     #tableWrap { display: none; }
     #pagination { display: none; }
+    .info-row { display: flex; align-items: center; margin-bottom: 15px; }
+    .info-row .label { min-width: 120px; }
+    .info-row .fixed-name { font-size: 16px; font-weight: bold; color: #444; margin-right: 20px; }
+    @media (max-width: 700px) {
+      .container { padding: 2px; }
+      table { font-size: 12px; }
+      th, td { padding: 5px; }
+      .info-row .label { min-width: 80px; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Task Duties Dashboard</h1>
-    <div class="controls">
-      <select id="nameFilter">
+    <div class="info-row">
+      <span class="label">Name of Employee (A3):</span>
+      <span class="fixed-name" id="employeeNameA3"></span>
+      <span class="label">Select Employee (A4):</span>
+      <select id="nameDropdownA4">
         <option value="">Select Employee</option>
       </select>
+    </div>
+    <div class="controls">
+      <span class="label">Search in Dashboard:</span>
       <input id="searchBox" class="search" placeholder="Search..." disabled>
     </div>
     <div id="tableWrap">Loading data...</div>
@@ -39,16 +55,27 @@
 
   <script>
     const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
-    const DASHBOARD_GID = "1134492562"; // Dashboard tab
-    const PCHC_GID = "0"; // 'PC & HCs' sheet gid
+    const DASHBOARD_GID = "1134492562"; // Dashboard tab for table and A3
+    const PCHC_GID = "0"; // 'PC & HCs' sheet gid for dropdown list
     const NAME_RANGE = "B2:B22"; // Range for dropdown
+    const A3_RANGE = "A3:A3"; // Fixed name cell in Dashboard tab
     const ROWS_PER_PAGE = 10;
     const REFRESH_INTERVAL = 60000;
 
     let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
 
-    // Fetch employee names from "PC & HCs" B2:B22
-    async function fetchDropdown() {
+    // Fetch employee fixed name from Dashboard!A3
+    async function fetchEmployeeNameA3() {
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${A3_RANGE}&tqx=out:json&gid=${DASHBOARD_GID}`;
+      const res = await fetch(url + "&t=" + Date.now());
+      const text = await res.text();
+      const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+      const name = (json.table.rows[0] && json.table.rows[0].c[0]) ? (json.table.rows[0].c[0].f || json.table.rows[0].c[0].v) : "";
+      document.getElementById('employeeNameA3').textContent = name || "(not set)";
+    }
+
+    // Fetch employee names from 'PC & HCs' sheet, B2:B22 for dropdown (A4)
+    async function fetchDropdownA4() {
       const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${NAME_RANGE}&tqx=out:json&gid=${PCHC_GID}`;
       const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
@@ -58,7 +85,7 @@
       // Remove duplicates and trim spaces
       values = [...new Set(values.map(v => v.trim()))];
 
-      const select = document.getElementById('nameFilter');
+      const select = document.getElementById('nameDropdownA4');
       select.innerHTML = '<option value="">Select Employee</option>';
       values.forEach(val => {
         const opt = document.createElement('option');
@@ -69,7 +96,7 @@
     }
 
     // Fetch Dashboard data for table display
-    async function fetchSheet() {
+    async function fetchDashboardSheet() {
       const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
       const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
@@ -82,8 +109,9 @@
       }));
     }
 
+    // Filtering logic based on dropdown selection (A4) and search
     function applyFilters() {
-      const selectedName = document.getElementById('nameFilter').value.trim();
+      const selectedName = document.getElementById('nameDropdownA4').value.trim();
       const searchTerm = document.getElementById('searchBox').value.toLowerCase();
       const nameIndex = cols.findIndex(c => c.toLowerCase().includes("name"));
 
@@ -182,11 +210,12 @@
     }
 
     document.getElementById('searchBox').addEventListener('input', applyFilters);
-    document.getElementById('nameFilter').addEventListener('change', applyFilters);
+    document.getElementById('nameDropdownA4').addEventListener('change', applyFilters);
 
     async function init() {
-      await fetchDropdown();
-      await fetchSheet();
+      await fetchEmployeeNameA3();
+      await fetchDropdownA4();
+      await fetchDashboardSheet();
     }
 
     init();
