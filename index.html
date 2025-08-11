@@ -48,6 +48,7 @@
     let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
     let dropdownReady = false, sheetReady = false;
 
+    // Fetch dropdown values from PC & HCs tab B2:B22
     async function fetchDropdown() {
       const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${encodeURIComponent(NAME_RANGE)}&tqx=out:json&gid=${PCHC_GID}`;
       try {
@@ -71,6 +72,7 @@
       }
     }
 
+    // Fetch Dash Board tab data and use .f if available (formatted), else .v (raw value) for display
     async function fetchSheet() {
       const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
       try {
@@ -78,7 +80,11 @@
         const text = await res.text();
         const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
         cols = json.table.cols.map(c => c.label || "");
-        rows = json.table.rows.map(r => r.c.map(cell => cell ? cell.v : ""));
+        rows = json.table.rows.map(r => r.c.map(cell => {
+          if (!cell) return "";
+          // Use .f (formatted) value if available, else fallback to .v (raw)
+          return cell.f !== undefined ? cell.f : (cell.v !== undefined ? cell.v : "");
+        }));
         sheetReady = true;
       } catch (e) {
         document.getElementById('tableWrap').innerText = 'Error loading dashboard!';
@@ -86,6 +92,7 @@
       }
     }
 
+    // Filter Dash Board rows where Name matches selected dropdown value (like VLOOKUP)
     function applyFilters() {
       if (!dropdownReady || !sheetReady) return;
       const selectedName = document.getElementById('nameFilter').value;
