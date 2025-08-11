@@ -59,6 +59,12 @@
     const NAME_RANGE = "B2:B22"; // PC & HCs!B2:B22
     const ROWS_PER_PAGE = 10;
     const REFRESH_INTERVAL = 60000;
+    // Only allow these names in dropdown:
+    const allowedNames = [
+      "Syed Naseeruddin Peer","B.Venu Gopal","R. Priya Kumar","K.V. Ranga Reddy","S. Abdul Alam","M. Eswaraiah",
+      "P. Jacob Prabhakar","P.Nagendra Babu","V. Madhu Sudhan","M.G. Dhanunjaya","S.A.M. Shafi","T.Prabhakar Rao",
+      "K. Giddaiah","C. Praveen","G. Rambabu","P. Madhu Sudhan","K.M. Adithya Prathap","G.Suhasini"
+    ];
 
     let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
 
@@ -79,6 +85,11 @@
       const text = await res.text();
       const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
       let values = json.table.rows.map(r => r.c[0] ? (r.c[0].f || r.c[0].v) : "").filter(Boolean);
+      // Only allow names that match provided allowedNames (case and whitespace insensitive)
+      values = values.filter(val =>
+        allowedNames.some(name => name.trim().toLowerCase() === val.trim().toLowerCase())
+      );
+      // Remove duplicates and trim spaces
       values = [...new Set(values.map(v => v.trim()))];
       const select = document.getElementById('employeeDropdownA4');
       select.innerHTML = '<option value="">Select Employee</option>';
