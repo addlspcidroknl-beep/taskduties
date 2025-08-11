@@ -1,1 +1,74 @@
-Ayub Khan
+import React, { useState } from "react";
+
+// Initial data based on your CSV structure (first few rows)
+const initialData = [
+  [
+    "Task duties", "", "", "", "", "",
+    "Next officer for Tappal and tasks", "", "", "", "", "", "", "", "", "", "", "", "", ""
+  ],
+  ["", "", "", "", "", "Tappal", "Task", "Task", "", "", "", "", "", "", "", "", "", "", "", ""],
+  [
+    "Name of the employee", "Rank", "Phone Number", "Name of the employee", "Rank", "Phone Number",
+    "S. Abdul Alam", "S. Usman Gani", "Syed Naseeruddin Peer", "", "", "", "", "", "", "", "", "", "", ""
+  ],
+  [
+    "#N/A", "#N/A", "#N/A", "", "#N/A", "#N/A", "Tappal", "", "", "", "", "", "", "", "", "", "", "", "", ""
+  ],
+  [
+    "Nature of duty", "From", "To", "Nature of duty", "From", "To",
+    "From", "To", "Plae", "", "", "", "", "", "", "", "", "", "", ""
+  ],
+  [
+    "#N/A", "#N/A", "#N/A", "#N/A", "#N/A", "#N/A", "#N/A", "#N/A", "#N/A", "", "", "", "", "", "", "", "", "", "", ""
+  ]
+  // Add more rows or load/save as needed
+];
+
+function App() {
+  const [data, setData] = useState(initialData);
+
+  // Edit a cell
+  const handleCellChange = (rowIdx, colIdx, value) => {
+    setData(prev =>
+      prev.map((row, r) =>
+        r === rowIdx
+          ? row.map((cell, c) => (c === colIdx ? value : cell))
+          : row
+      )
+    );
+  };
+
+  // Add a new empty row
+  const addRow = () => {
+    setData(prev => [
+      ...prev,
+      Array(prev[0]?.length || 10).fill("")
+    ]);
+  };
+
+  return (
+    <div style={{ padding: 24 }}>
+      <h2>Task Duties Table</h2>
+      <table border="1" cellPadding="4" style={{ borderCollapse: "collapse", width: "100%" }}>
+        <tbody>
+          {data.map((row, rowIdx) => (
+            <tr key={rowIdx}>
+              {row.map((cell, colIdx) => (
+                <td key={colIdx}>
+                  <input
+                    value={cell}
+                    style={{ width: "100%" }}
+                    onChange={e => handleCellChange(rowIdx, colIdx, e.target.value)}
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button onClick={addRow} style={{ marginTop: 12 }}>Add Row</button>
+    </div>
+  );
+}
+
+export default App;
