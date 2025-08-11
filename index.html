@@ -1,74 +1,193 @@
-# Task Duties Dashboard – GitHub Deployment Guide
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Task Duties Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 0; }
+    .container { max-width: 1100px; margin: auto; padding: 20px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 10px; }
+    h1 { text-align: center; color: #333; margin-bottom: 15px; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
+    select, .search { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
+    .search { flex: 1; min-width: 200px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
+    th { background: #4CAF50; color: white; cursor: pointer; position: sticky; top: 0; }
+    tr:nth-child(even) { background: #f2f2f2; }
+    .pagination { margin-top: 15px; display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; }
+    .pagination button { padding: 6px 12px; border: none; background: #4CAF50; color: white; cursor: pointer; border-radius: 5px; }
+    .pagination button.disabled { background: #ccc; cursor: not-allowed; }
+    .pagination button.active { background: #388E3C; }
+    #tableWrap { display: none; }
+    #pagination { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Task Duties Dashboard</h1>
+    <div class="controls">
+      <select id="nameFilter">
+        <option value="">Select Employee</option>
+      </select>
+      <input id="searchBox" class="search" placeholder="Search..." disabled>
+    </div>
+    <div id="tableWrap">Loading data...</div>
+    <div class="pagination" id="pagination"></div>
+    <p style="text-align:center;font-size:12px;color:#777;">Auto-refreshes every 60 seconds</p>
+  </div>
 
-This guide helps you deploy the Task Duties Dashboard (from `index.html`) on GitHub Pages, using data from your Google Sheets.
+  <script>
+    const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
+    const DASHBOARD_GID = "1134492562"; // Dashboard tab
+    const PCHC_GID = "0"; // 'PC & HCs' sheet gid
+    const NAME_RANGE = "B2:B22"; // Range for dropdown
+    const ROWS_PER_PAGE = 10;
+    const REFRESH_INTERVAL = 60000;
 
-## How It Works
+    let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
 
-The dashboard (`index.html`) fetches data from your Google Sheet using the public [Google Visualization API](https://developers.google.com/chart/interactive/docs/reference#methods) for Sheets. No server-side code or API keys are required; all fetching is done client-side via JavaScript.
+    async function fetchDropdown() {
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${NAME_RANGE}&tqx=out:json&gid=${PCHC_GID}`;
+      const res = await fetch(url + "&t=" + Date.now());
+      const text = await res.text();
+      const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+      let values = json.table.rows.map(r => r.c[0] ? (r.c[0].f || r.c[0].v) : "").filter(Boolean);
 
-## Prerequisites
+      // Remove duplicates
+      values = [...new Set(values)];
 
-- **Google Sheet must be published to the web** and accessible to anyone with the link.
-- **Sheet ID:** `1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw`
-- **Dashboard GID:** `1134492562`
-- **Dropdown GID:** `0`
-- **Range for dropdown:** `PC & HCs!B2:B22`
+      const select = document.getElementById('nameFilter');
+      select.innerHTML = '<option value="">Select Employee</option>';
+      values.forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val;
+        select.appendChild(opt);
+      });
+    }
 
-## Steps
+    async function fetchSheet() {
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
+      const res = await fetch(url + "&t=" + Date.now());
+      const text = await res.text();
+      const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
 
-### 1. Prepare Your Google Sheet
+      cols = json.table.cols.map(c => c.label || "");
+      rows = json.table.rows.map(r => r.c.map(cell => {
+        if (!cell) return "";
+        return cell.f ? cell.f : cell.v;
+      }));
+    }
 
-1. Open your Google Sheet.
-2. Go to `File` > `Share` > `Publish to web`.
-   - Publish the entire sheet or the relevant tabs.
-3. Ensure **anyone with the link can view** (not just restricted users).
+    function applyFilters() {
+      const selectedName = document.getElementById('nameFilter').value;
+      const searchTerm = document.getElementById('searchBox').value.toLowerCase();
+      const nameIndex = cols.findIndex(c => c.toLowerCase().includes("name"));
 
-### 2. Deploy to GitHub Pages
+      if (!selectedName) {
+        document.getElementById('tableWrap').style.display = "none";
+        document.getElementById('pagination').style.display = "none";
+        document.getElementById('searchBox').disabled = true;
+        return;
+      }
 
-1. **Add `index.html` to your repository root** (already present).
-2. **Enable GitHub Pages:**
-   - Go to your repository's `Settings` > `Pages`.
-   - Set source to `main` (or your default branch) and `/root` (if `index.html` is in the root).
-   - Save. Your site will be available at `https://{your-username}.github.io/{repo-name}/`.
+      filteredRows = rows.filter(r => {
+        const matchesName = r[nameIndex] === selectedName;
+        const matchesSearch = !searchTerm || r.join(" ").toLowerCase().includes(searchTerm);
+        return matchesName && matchesSearch;
+      });
 
-### 3. No API Key Needed
+      document.getElementById('tableWrap').style.display = "block";
+      document.getElementById('pagination').style.display = "flex";
+      document.getElementById('searchBox').disabled = false;
 
-- The script works by requesting data from the URLs:
-  - For dropdown:  
-    `https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?range={NAME_RANGE}&tqx=out:json&gid={PCHC_GID}`
-  - For dashboard:  
-    `https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:json&gid={DASHBOARD_GID}`
+      currentPage = 1;
+      renderTable();
+      renderPagination();
+    }
 
-- The Sheet must be **public**.
+    function renderTable() {
+      const tableWrap = document.getElementById('tableWrap');
+      const start = (currentPage - 1) * ROWS_PER_PAGE;
+      const end = start + ROWS_PER_PAGE;
+      const pageRows = filteredRows.slice(start, end);
 
-### 4. Troubleshooting
+      const table = document.createElement('table');
+      const thead = table.createTHead();
+      const headRow = thead.insertRow();
+      cols.forEach((col, index) => {
+        const th = document.createElement('th');
+        th.textContent = col;
+        th.onclick = () => sortTable(index);
+        if (sortCol === index) th.textContent += sortAsc ? " ▲" : " ▼";
+        headRow.appendChild(th);
+      });
 
-- **Dropdown not loading / table not showing:**  
-  Ensure the Sheet is published and public.  
-  Try opening the fetch URLs in your browser; you should see a JSON response.
+      const tbody = table.createTBody();
+      pageRows.forEach(row => {
+        const tr = tbody.insertRow();
+        row.forEach(cell => {
+          const td = tr.insertCell();
+          td.textContent = cell;
+        });
+      });
 
-- **Data not updating:**  
-  The dashboard auto-refreshes every 60 seconds. Manual sheet changes will reflect on next refresh.
+      tableWrap.innerHTML = "";
+      tableWrap.appendChild(table);
+    }
 
-- **CORS Issues:**  
-  Google's Visualization API supports cross-origin requests for public sheets.
+    function renderPagination() {
+      const pagination = document.getElementById('pagination');
+      pagination.innerHTML = "";
+      const totalPages = Math.ceil(filteredRows.length / ROWS_PER_PAGE);
 
-## Customization
+      const prevBtn = document.createElement('button');
+      prevBtn.textContent = "Prev";
+      prevBtn.disabled = currentPage === 1;
+      prevBtn.className = prevBtn.disabled ? "disabled" : "";
+      prevBtn.onclick = () => { if (currentPage > 1) { currentPage--; renderTable(); renderPagination(); } };
+      pagination.appendChild(prevBtn);
 
-- **Column names / data structure:**  
-  Change your Sheet columns and the dashboard will adapt automatically.
-- **Dropdown range:**  
-  Adjust the `NAME_RANGE` variable in the script if employee names move.
+      for (let i = 1; i <= totalPages; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        if (i === currentPage) btn.className = "active";
+        btn.onclick = () => { currentPage = i; renderTable(); renderPagination(); };
+        pagination.appendChild(btn);
+      }
 
-## Security Note
+      const nextBtn = document.createElement('button');
+      nextBtn.textContent = "Next";
+      nextBtn.disabled = currentPage === totalPages;
+      nextBtn.className = nextBtn.disabled ? "disabled" : "";
+      nextBtn.onclick = () => { if (currentPage < totalPages) { currentPage++; renderTable(); renderPagination(); } };
+      pagination.appendChild(nextBtn);
+    }
 
-- All data is fetched client-side. Anyone viewing the dashboard can see the sheet data.
-- Do not publish sensitive information.
+    function sortTable(colIndex) {
+      sortAsc = (sortCol === colIndex) ? !sortAsc : true;
+      sortCol = colIndex;
+      filteredRows.sort((a, b) => {
+        if (a[colIndex] < b[colIndex]) return sortAsc ? -1 : 1;
+        if (a[colIndex] > b[colIndex]) return sortAsc ? 1 : -1;
+        return 0;
+      });
+      currentPage = 1;
+      renderTable();
+      renderPagination();
+    }
 
-## Example
+    document.getElementById('searchBox').addEventListener('input', applyFilters);
+    document.getElementById('nameFilter').addEventListener('change', applyFilters);
 
-Visit your dashboard at:  
-`https://addlspcidroknl-beep.github.io/taskduties/`
+    async function init() {
+      await fetchDropdown();
+      await fetchSheet();
+    }
 
----
-**Enjoy your auto-updating dashboard powered by Google Sheets + GitHub Pages!**
+    init();
+    setInterval(init, REFRESH_INTERVAL);
+  </script>
+</body>
+</html>
