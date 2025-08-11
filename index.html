@@ -2,218 +2,106 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <title>Google Sheet Viewer</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Task Duties Dashboard</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 0; }
-    .container { max-width: 1100px; margin: auto; padding: 20px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 10px; }
-    h1 { text-align: center; color: #333; margin-bottom: 15px; }
-    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
-    select, .search { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
-    .search { flex: 1; min-width: 200px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
-    th { background: #4CAF50; color: white; cursor: pointer; position: sticky; top: 0; }
-    tr:nth-child(even) { background: #f2f2f2; }
-    .pagination { margin-top: 15px; display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; }
-    .pagination button { padding: 6px 12px; border: none; background: #4CAF50; color: white; cursor: pointer; border-radius: 5px; }
-    .pagination button.disabled { background: #ccc; cursor: not-allowed; }
-    .pagination button.active { background: #388E3C; }
-    #tableWrap { display: none; }
-    #pagination { display: none; }
+    body { font-family: Arial, sans-serif; background: #f9f9f9; }
+    .container { max-width: 1200px; margin: 40px auto; padding: 20px; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);}
+    h1 { text-align: center; }
+    .controls { margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; }
+    select, button { font-size: 1em; padding: 8px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #bbb; padding: 8px; font-size: 15px; }
+    th { background: #e6f2ff; }
+    tr:nth-child(even) td { background: #f4f9fd; }
+    #error { color: red; font-weight: bold; }
+    .footer { text-align: center; margin: 20px 0 0 0; color: #888; font-size: 0.9em;}
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Task Duties Dashboard</h1>
-    <div class="controls">
-      <select id="nameFilter">
-        <option value="">Select Employee</option>
-      </select>
-      <input id="searchBox" class="search" placeholder="Search..." disabled>
-    </div>
-    <div id="tableWrap">Loading data...</div>
-    <div class="pagination" id="pagination"></div>
-    <p style="text-align:center;font-size:12px;color:#777;">Auto-refreshes every 60 seconds</p>
+<div class="container">
+  <h1>Google Sheet Viewer</h1>
+  <div class="controls">
+    <label for="tabSelect">Choose Sheet Tab:</label>
+    <select id="tabSelect"></select>
+    <button id="refreshBtn">Refresh</button>
   </div>
+  <div id="error"></div>
+  <div id="sheetTable"></div>
+  <div class="footer">Powered by Google Sheets public API | Auto-refreshes every 60 seconds</div>
+</div>
+<script>
+const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
+// List your tabs and their GIDs here. You can add more tabs as needed.
+const TABS = [
+  {name: "Dash Board", gid: "1134492562"},
+  {name: "PC & HCs", gid: "0"},
+  // Add more tabs like: {name: "AnotherTab", gid: "123456789"}
+];
+const REFRESH_INTERVAL = 60000;
 
-  <script>
-    const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
-    const DASHBOARD_GID = "1134492562"; // Dash Board tab GID
-    const PCHC_GID = "0"; // PC & HCs tab GID
-    const NAME_RANGE = "PC & HCs!B2:B22";
-    const ROWS_PER_PAGE = 10;
-    const REFRESH_INTERVAL = 60000;
+function setError(msg) {
+  document.getElementById('error').innerText = msg || '';
+}
+function setTable(html) {
+  document.getElementById('sheetTable').innerHTML = html || '';
+}
 
-    let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
-    let dropdownReady = false, sheetReady = false;
-    let selectedName = "";
+function buildTabSelector() {
+  const sel = document.getElementById('tabSelect');
+  sel.innerHTML = '';
+  TABS.forEach(tab => {
+    const opt = document.createElement('option');
+    opt.value = tab.gid;
+    opt.textContent = tab.name;
+    sel.appendChild(opt);
+  });
+}
 
-    function normalizeName(name) {
-      return (name || "").toString().trim().toLowerCase();
-    }
+async function fetchSheet(gid) {
+  setError('');
+  setTable('Loading...');
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${gid}`;
+    const res = await fetch(url + "&t=" + Date.now());
+    const text = await res.text();
+    if (!text.includes('table')) throw new Error("No table in response. Is the sheet published?");
+    const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    if (!json.table || !json.table.cols || !json.table.rows) throw new Error("Malformed table data.");
+    // Get column headers
+    const cols = json.table.cols.map(c => c.label || "");
+    // Get row data (display formatted value if present, else raw value)
+    const rows = json.table.rows.map(r =>
+      r.c.map(cell => cell ? (cell.f !== undefined ? cell.f : (cell.v !== undefined ? cell.v : "")) : "")
+    );
+    // Render table
+    let html = "<table><thead><tr>";
+    cols.forEach(col => { html += `<th>${col}</th>`; });
+    html += "</tr></thead><tbody>";
+    rows.forEach(row => {
+      html += "<tr>";
+      row.forEach(cell => { html += `<td>${cell}</td>`; });
+      html += "</tr>";
+    });
+    html += "</tbody></table>";
+    setTable(html);
+  } catch(e) {
+    setError("Error: " + e.message);
+    setTable('');
+  }
+}
 
-    async function fetchDropdown() {
-      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${encodeURIComponent(NAME_RANGE)}&tqx=out:json&gid=${PCHC_GID}`;
-      try {
-        const res = await fetch(url + "&t=" + Date.now());
-        const text = await res.text();
-        const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
-        let values = json.table.rows.map(r => r.c[0] ? (r.c[0].f || r.c[0].v) : "").filter(Boolean);
-        values = [...new Set(values)];
-        const select = document.getElementById('nameFilter');
-        select.innerHTML = '<option value="">Select Employee</option>';
-        values.forEach(val => {
-          const opt = document.createElement('option');
-          opt.value = val;
-          opt.textContent = val;
-          select.appendChild(opt);
-        });
-        dropdownReady = true;
-      } catch (e) {
-        document.getElementById('tableWrap').innerText = 'Error loading dropdown!';
-        dropdownReady = false;
-      }
-    }
+function refresh() {
+  const gid = document.getElementById('tabSelect').value;
+  fetchSheet(gid);
+}
 
-    async function fetchSheet() {
-      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
-      try {
-        const res = await fetch(url + "&t=" + Date.now());
-        const text = await res.text();
-        const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
-        cols = json.table.cols.map(c => c.label || "");
-        rows = json.table.rows.map(r => r.c.map(cell => {
-          if (!cell) return "";
-          return cell.f !== undefined ? cell.f : (cell.v !== undefined ? cell.v : "");
-        }));
-        sheetReady = true;
-      } catch (e) {
-        document.getElementById('tableWrap').innerText = 'Error loading dashboard!';
-        sheetReady = false;
-      }
-    }
+document.getElementById('refreshBtn').addEventListener('click', refresh);
+document.getElementById('tabSelect').addEventListener('change', refresh);
 
-    function applyFilters() {
-      if (!dropdownReady || !sheetReady) return;
-      selectedName = document.getElementById('nameFilter').value;
-      const searchTerm = document.getElementById('searchBox').value.toLowerCase();
-
-      // Find the "Name of the employee" column index (case-insensitive, trims)
-      let nameIndex = cols.findIndex(c => normalizeName(c) === "name of the employee");
-      if (nameIndex === -1) {
-        // fallback: look for column containing "name"
-        nameIndex = cols.findIndex(c => normalizeName(c).includes("name"));
-        if (nameIndex === -1) {
-          document.getElementById('tableWrap').innerText = 'No "Name of the employee" column found in Dash Board tab!';
-          document.getElementById('tableWrap').style.display = "block";
-          document.getElementById('pagination').style.display = "none";
-          return;
-        }
-      }
-
-      if (!selectedName) {
-        document.getElementById('tableWrap').style.display = "none";
-        document.getElementById('pagination').style.display = "none";
-        document.getElementById('searchBox').disabled = true;
-        return;
-      }
-
-      const normalizedSelected = normalizeName(selectedName);
-      filteredRows = rows.filter(r => {
-        const matchesName = normalizeName(r[nameIndex]) === normalizedSelected;
-        const matchesSearch = !searchTerm || r.join(" ").toLowerCase().includes(searchTerm);
-        return matchesName && matchesSearch;
-      });
-
-      document.getElementById('tableWrap').style.display = "block";
-      document.getElementById('pagination').style.display = "flex";
-      document.getElementById('searchBox').disabled = false;
-      currentPage = 1;
-      renderTable();
-      renderPagination();
-    }
-
-    function renderTable() {
-      const tableWrap = document.getElementById('tableWrap');
-      if (!filteredRows.length) {
-        tableWrap.innerHTML = `<p>No data found for selected employee.<br>Check spelling, spaces, and that the "Name of the employee" column exists in your Dash Board tab.</p>`;
-        return;
-      }
-      const start = (currentPage - 1) * ROWS_PER_PAGE;
-      const end = start + ROWS_PER_PAGE;
-      const pageRows = filteredRows.slice(start, end);
-      const table = document.createElement('table');
-      const thead = table.createTHead();
-      const headRow = thead.insertRow();
-      cols.forEach((col, index) => {
-        const th = document.createElement('th');
-        th.textContent = col;
-        th.onclick = () => sortTable(index);
-        if (sortCol === index) th.textContent += sortAsc ? " ▲" : " ▼";
-        headRow.appendChild(th);
-      });
-      const tbody = table.createTBody();
-      pageRows.forEach(row => {
-        const tr = tbody.insertRow();
-        row.forEach(cell => {
-          const td = tr.insertCell();
-          td.textContent = cell;
-        });
-      });
-      tableWrap.innerHTML = "";
-      tableWrap.appendChild(table);
-    }
-
-    function renderPagination() {
-      const pagination = document.getElementById('pagination');
-      pagination.innerHTML = "";
-      const totalPages = Math.ceil(filteredRows.length / ROWS_PER_PAGE);
-      const prevBtn = document.createElement('button');
-      prevBtn.textContent = "Prev";
-      prevBtn.disabled = currentPage === 1;
-      prevBtn.className = prevBtn.disabled ? "disabled" : "";
-      prevBtn.onclick = () => { if (currentPage > 1) { currentPage--; renderTable(); renderPagination(); } };
-      pagination.appendChild(prevBtn);
-      for (let i = 1; i <= totalPages; i++) {
-        const btn = document.createElement('button');
-        btn.textContent = i;
-        if (i === currentPage) btn.className = "active";
-        btn.onclick = () => { currentPage = i; renderTable(); renderPagination(); };
-        pagination.appendChild(btn);
-      }
-      const nextBtn = document.createElement('button');
-      nextBtn.textContent = "Next";
-      nextBtn.disabled = currentPage === totalPages;
-      nextBtn.className = nextBtn.disabled ? "disabled" : "";
-      nextBtn.onclick = () => { if (currentPage < totalPages) { currentPage++; renderTable(); renderPagination(); } };
-      pagination.appendChild(nextBtn);
-    }
-
-    function sortTable(colIndex) {
-      sortAsc = (sortCol === colIndex) ? !sortAsc : true;
-      sortCol = colIndex;
-      filteredRows.sort((a, b) => {
-        if (a[colIndex] < b[colIndex]) return sortAsc ? -1 : 1;
-        if (a[colIndex] > b[colIndex]) return sortAsc ? 1 : -1;
-        return 0;
-      });
-      currentPage = 1;
-      renderTable();
-      renderPagination();
-    }
-
-    document.getElementById('searchBox').addEventListener('input', applyFilters);
-    document.getElementById('nameFilter').addEventListener('change', applyFilters);
-
-    async function init() {
-      await fetchDropdown();
-      await fetchSheet();
-      applyFilters();
-    }
-
-    init();
-    setInterval(init, REFRESH_INTERVAL);
-  </script>
+buildTabSelector();
+refresh();
+setInterval(refresh, REFRESH_INTERVAL);
+</script>
 </body>
 </html>
