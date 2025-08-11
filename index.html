@@ -48,15 +48,20 @@
       const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
       const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+
       cols = json.table.cols.map(c => c.label || "");
-      rows = json.table.rows.map(r => r.c.map(cell => cell ? cell.v : ""));
+      rows = json.table.rows.map(r => r.c.map(cell => {
+        if (!cell) return "";
+        return cell.f ? cell.f : cell.v; // Use formatted value if available
+      }));
+
       populateNameDropdown();
       applyFilters();
     }
 
     function populateNameDropdown() {
       const nameIndex = cols.findIndex(c => c.toLowerCase() === "name");
-      if (nameIndex === -1) return; 
+      if (nameIndex === -1) return;
       const names = [...new Set(rows.map(r => r[nameIndex]).filter(Boolean))].sort();
       const select = document.getElementById('nameFilter');
       select.innerHTML = '<option value="">All Names</option>';
