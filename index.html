@@ -19,6 +19,8 @@
     .pagination button { padding: 6px 12px; border: none; background: #4CAF50; color: white; cursor: pointer; border-radius: 5px; }
     .pagination button.disabled { background: #ccc; cursor: not-allowed; }
     .pagination button.active { background: #388E3C; }
+    #tableWrap { display: none; } /* Hidden until name selected */
+    #pagination { display: none; } /* Hidden until name selected */
   </style>
 </head>
 <body>
@@ -28,7 +30,7 @@
       <select id="nameFilter">
         <option value="">Select Employee</option>
       </select>
-      <input id="searchBox" class="search" placeholder="Search...">
+      <input id="searchBox" class="search" placeholder="Search..." disabled>
     </div>
     <div id="tableWrap">Loading data...</div>
     <div class="pagination" id="pagination"></div>
@@ -38,8 +40,8 @@
   <script>
     const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
     const DASHBOARD_GID = "1134492562"; // Dashboard tab
-    const PCHC_GID = "0"; // 'PC & HCs' sheet gid (usually 0 for first sheet)
-    const NAME_RANGE = "B2:B22"; // Range for dropdown list
+    const PCHC_GID = "0"; // 'PC & HCs' sheet gid (likely 0)
+    const NAME_RANGE = "B2:B22"; // Range for dropdown
     const ROWS_PER_PAGE = 10;
     const REFRESH_INTERVAL = 60000;
 
@@ -73,20 +75,30 @@
         if (!cell) return "";
         return cell.f ? cell.f : cell.v;
       }));
-
-      applyFilters();
     }
 
     function applyFilters() {
-      const searchTerm = document.getElementById('searchBox').value.toLowerCase();
       const selectedName = document.getElementById('nameFilter').value;
+      const searchTerm = document.getElementById('searchBox').value.toLowerCase();
       const nameIndex = cols.findIndex(c => c.toLowerCase().includes("name"));
 
+      if (!selectedName) {
+        document.getElementById('tableWrap').style.display = "none";
+        document.getElementById('pagination').style.display = "none";
+        document.getElementById('searchBox').disabled = true;
+        return;
+      }
+
       filteredRows = rows.filter(r => {
-        const matchesName = !selectedName || r[nameIndex] === selectedName;
+        const matchesName = r[nameIndex] === selectedName;
         const matchesSearch = !searchTerm || r.join(" ").toLowerCase().includes(searchTerm);
         return matchesName && matchesSearch;
       });
+
+      document.getElementById('tableWrap').style.display = "block";
+      document.getElementById('pagination').style.display = "flex";
+      document.getElementById('searchBox').disabled = false;
+
       currentPage = 1;
       renderTable();
       renderPagination();
