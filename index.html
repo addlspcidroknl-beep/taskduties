@@ -2,43 +2,31 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Google Sheet Viewer</title>
+  <title>Google Sheet Dash Board Viewer</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body { font-family: Arial, sans-serif; background: #f9f9f9; }
     .container { max-width: 1200px; margin: 40px auto; padding: 20px; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);}
     h1 { text-align: center; }
-    .controls { margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; }
-    select, button { font-size: 1em; padding: 8px; }
     table { border-collapse: collapse; width: 100%; margin-top: 20px; }
     th, td { border: 1px solid #bbb; padding: 8px; font-size: 15px; }
     th { background: #e6f2ff; }
     tr:nth-child(even) td { background: #f4f9fd; }
     #error { color: red; font-weight: bold; }
     .footer { text-align: center; margin: 20px 0 0 0; color: #888; font-size: 0.9em;}
+    .raw-value { color: #888; font-size: 0.9em; }
   </style>
 </head>
 <body>
 <div class="container">
-  <h1>Google Sheet Viewer</h1>
-  <div class="controls">
-    <label for="tabSelect">Choose Sheet Tab:</label>
-    <select id="tabSelect"></select>
-    <button id="refreshBtn">Refresh</button>
-  </div>
+  <h1>Dash Board Tab (Display + Raw Values)</h1>
   <div id="error"></div>
   <div id="sheetTable"></div>
-  <div class="footer">Powered by Google Sheets public API | Auto-refreshes every 60 seconds</div>
+  <div class="footer">Only display and raw values can be shown; Google Sheets does not expose formulas via API.</div>
 </div>
 <script>
 const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
-// List your tabs and their GIDs here. You can add more tabs as needed.
-const TABS = [
-  {name: "Dash Board", gid: "1134492562"},
-  {name: "PC & HCs", gid: "0"},
-  // Add more tabs like: {name: "AnotherTab", gid: "123456789"}
-];
-const REFRESH_INTERVAL = 60000;
+const DASHBOARD_GID = "1134492562";
 
 function setError(msg) {
   document.getElementById('error').innerText = msg || '';
@@ -47,33 +35,27 @@ function setTable(html) {
   document.getElementById('sheetTable').innerHTML = html || '';
 }
 
-function buildTabSelector() {
-  const sel = document.getElementById('tabSelect');
-  sel.innerHTML = '';
-  TABS.forEach(tab => {
-    const opt = document.createElement('option');
-    opt.value = tab.gid;
-    opt.textContent = tab.name;
-    sel.appendChild(opt);
-  });
-}
-
-async function fetchSheet(gid) {
+async function fetchSheet() {
   setError('');
   setTable('Loading...');
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${gid}`;
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
     const res = await fetch(url + "&t=" + Date.now());
     const text = await res.text();
     if (!text.includes('table')) throw new Error("No table in response. Is the sheet published?");
     const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
     if (!json.table || !json.table.cols || !json.table.rows) throw new Error("Malformed table data.");
+
     // Get column headers
     const cols = json.table.cols.map(c => c.label || "");
-    // Get row data (display formatted value if present, else raw value)
+    // Get row data: show both formatted and raw value
     const rows = json.table.rows.map(r =>
-      r.c.map(cell => cell ? (cell.f !== undefined ? cell.f : (cell.v !== undefined ? cell.v : "")) : "")
+      r.c.map(cell => cell ?
+        `<div>${cell.f !== undefined ? cell.f : cell.v !== undefined ? cell.v : ""}</div>
+         <div class="raw-value">${cell.v !== undefined && cell.f !== cell.v ? "Raw: " + cell.v : ""}</div>`
+        : "<div></div>")
     );
+
     // Render table
     let html = "<table><thead><tr>";
     cols.forEach(col => { html += `<th>${col}</th>`; });
@@ -91,17 +73,8 @@ async function fetchSheet(gid) {
   }
 }
 
-function refresh() {
-  const gid = document.getElementById('tabSelect').value;
-  fetchSheet(gid);
-}
-
-document.getElementById('refreshBtn').addEventListener('click', refresh);
-document.getElementById('tabSelect').addEventListener('change', refresh);
-
-buildTabSelector();
-refresh();
-setInterval(refresh, REFRESH_INTERVAL);
+fetchSheet();
+setInterval(fetchSheet, 60000);
 </script>
 </body>
 </html>
