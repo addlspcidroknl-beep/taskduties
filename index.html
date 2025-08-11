@@ -26,7 +26,7 @@
     <h1>Task Duties Dashboard</h1>
     <div class="controls">
       <select id="nameFilter">
-        <option value="">All Employees</option>
+        <option value="">Select Employee</option>
       </select>
       <input id="searchBox" class="search" placeholder="Search...">
     </div>
@@ -37,14 +37,33 @@
 
   <script>
     const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
-    const GID = "1134492562"; // Dashboard sheet tab
+    const DASHBOARD_GID = "1134492562"; // Dashboard tab
+    const PCHC_GID = "0"; // 'PC & HCs' sheet gid (usually 0 for first sheet)
+    const NAME_RANGE = "B2:B22"; // Range for dropdown list
     const ROWS_PER_PAGE = 10;
-    const REFRESH_INTERVAL = 60000; // 60 seconds
+    const REFRESH_INTERVAL = 60000;
 
     let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
 
+    async function fetchDropdown() {
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${NAME_RANGE}&tqx=out:json&gid=${PCHC_GID}`;
+      const res = await fetch(url + "&t=" + Date.now());
+      const text = await res.text();
+      const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+      const values = json.table.rows.map(r => r.c[0] ? (r.c[0].f || r.c[0].v) : "").filter(Boolean);
+
+      const select = document.getElementById('nameFilter');
+      select.innerHTML = '<option value="">Select Employee</option>';
+      values.forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val;
+        select.appendChild(opt);
+      });
+    }
+
     async function fetchSheet() {
-      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${GID}`;
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
       const res = await fetch(url + "&t=" + Date.now());
       const text = await res.text();
       const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
@@ -52,25 +71,10 @@
       cols = json.table.cols.map(c => c.label || "");
       rows = json.table.rows.map(r => r.c.map(cell => {
         if (!cell) return "";
-        return cell.f ? cell.f : cell.v; // Use formatted value if available
+        return cell.f ? cell.f : cell.v;
       }));
 
-      populateNameDropdown();
       applyFilters();
-    }
-
-    function populateNameDropdown() {
-      const nameIndex = cols.findIndex(c => c.toLowerCase().includes("name"));
-      if (nameIndex === -1) return;
-      const names = [...new Set(rows.map(r => r[nameIndex]).filter(Boolean))].sort();
-      const select = document.getElementById('nameFilter');
-      select.innerHTML = '<option value="">All Employees</option>';
-      names.forEach(name => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        select.appendChild(opt);
-      });
     }
 
     function applyFilters() {
@@ -162,8 +166,13 @@
     document.getElementById('searchBox').addEventListener('input', applyFilters);
     document.getElementById('nameFilter').addEventListener('change', applyFilters);
 
-    fetchSheet();
-    setInterval(fetchSheet, REFRESH_INTERVAL);
+    async function init() {
+      await fetchDropdown();
+      await fetchSheet();
+    }
+
+    init();
+    setInterval(init, REFRESH_INTERVAL);
   </script>
 </body>
 </html>
