@@ -40,71 +40,77 @@
   <script>
     const SHEET_ID = "1_A9bJiSV_-jsum3QLFX1UE0wkbxukvG9IORSwK1Agiw";
     const DASHBOARD_GID = "1134492562"; // Dash Board tab
-    const PCHC_GID = "0"; // 'PC & HCs' tab GID
-    const NAME_RANGE = "PC & HCs!B2:B22"; // Range for dropdown from PC & HCs tab
+    const PCHC_GID = "0"; // PC & HCs tab (change if not first tab!)
+    const NAME_RANGE = "PC & HCs!B2:B22";
     const ROWS_PER_PAGE = 10;
     const REFRESH_INTERVAL = 60000;
 
     let cols = [], rows = [], filteredRows = [], currentPage = 1, sortCol = null, sortAsc = true;
+    let dropdownReady = false, sheetReady = false;
 
-    // Fetch dropdown values from PC & HCs tab B2:B22
     async function fetchDropdown() {
       const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?range=${encodeURIComponent(NAME_RANGE)}&tqx=out:json&gid=${PCHC_GID}`;
-      const res = await fetch(url + "&t=" + Date.now());
-      const text = await res.text();
-      const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
-      let values = json.table.rows.map(r => r.c[0] ? (r.c[0].f || r.c[0].v) : "").filter(Boolean);
-
-      // Remove duplicates
-      values = [...new Set(values)];
-
-      const select = document.getElementById('nameFilter');
-      select.innerHTML = '<option value="">Select Employee</option>';
-      values.forEach(val => {
-        const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = val;
-        select.appendChild(opt);
-      });
+      try {
+        const res = await fetch(url + "&t=" + Date.now());
+        const text = await res.text();
+        const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+        let values = json.table.rows.map(r => r.c[0] ? (r.c[0].f || r.c[0].v) : "").filter(Boolean);
+        values = [...new Set(values)];
+        const select = document.getElementById('nameFilter');
+        select.innerHTML = '<option value="">Select Employee</option>';
+        values.forEach(val => {
+          const opt = document.createElement('option');
+          opt.value = val;
+          opt.textContent = val;
+          select.appendChild(opt);
+        });
+        dropdownReady = true;
+      } catch (e) {
+        document.getElementById('tableWrap').innerText = 'Error loading dropdown!';
+        dropdownReady = false;
+      }
     }
 
-    // Fetch ALL Dash Board tab data as-is
     async function fetchSheet() {
       const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${DASHBOARD_GID}`;
-      const res = await fetch(url + "&t=" + Date.now());
-      const text = await res.text();
-      const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
-      cols = json.table.cols.map(c => c.label || "");
-      rows = json.table.rows.map(r => r.c.map(cell => {
-        if (!cell) return "";
-        // Use .v for raw value (as in vlookup, no formatting)
-        return cell.v;
-      }));
+      try {
+        const res = await fetch(url + "&t=" + Date.now());
+        const text = await res.text();
+        const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+        cols = json.table.cols.map(c => c.label || "");
+        rows = json.table.rows.map(r => r.c.map(cell => cell ? cell.v : ""));
+        sheetReady = true;
+      } catch (e) {
+        document.getElementById('tableWrap').innerText = 'Error loading dashboard!';
+        sheetReady = false;
+      }
     }
 
-    // VLOOKUP-like filter: Show Dash Board rows where Name matches selected dropdown value
     function applyFilters() {
+      if (!dropdownReady || !sheetReady) return;
       const selectedName = document.getElementById('nameFilter').value;
       const searchTerm = document.getElementById('searchBox').value.toLowerCase();
       const nameIndex = cols.findIndex(c => c.toLowerCase().includes("name"));
-
+      if (nameIndex === -1) {
+        document.getElementById('tableWrap').innerText = 'No "Name" column found in Dash Board tab!';
+        document.getElementById('tableWrap').style.display = "block";
+        document.getElementById('pagination').style.display = "none";
+        return;
+      }
       if (!selectedName) {
         document.getElementById('tableWrap').style.display = "none";
         document.getElementById('pagination').style.display = "none";
         document.getElementById('searchBox').disabled = true;
         return;
       }
-
       filteredRows = rows.filter(r => {
         const matchesName = r[nameIndex] === selectedName;
         const matchesSearch = !searchTerm || r.join(" ").toLowerCase().includes(searchTerm);
         return matchesName && matchesSearch;
       });
-
       document.getElementById('tableWrap').style.display = "block";
       document.getElementById('pagination').style.display = "flex";
       document.getElementById('searchBox').disabled = false;
-
       currentPage = 1;
       renderTable();
       renderPagination();
@@ -112,10 +118,13 @@
 
     function renderTable() {
       const tableWrap = document.getElementById('tableWrap');
+      if (!filteredRows.length) {
+        tableWrap.innerHTML = "<p>No data found for selected employee.</p>";
+        return;
+      }
       const start = (currentPage - 1) * ROWS_PER_PAGE;
       const end = start + ROWS_PER_PAGE;
       const pageRows = filteredRows.slice(start, end);
-
       const table = document.createElement('table');
       const thead = table.createTHead();
       const headRow = thead.insertRow();
@@ -126,7 +135,6 @@
         if (sortCol === index) th.textContent += sortAsc ? " ▲" : " ▼";
         headRow.appendChild(th);
       });
-
       const tbody = table.createTBody();
       pageRows.forEach(row => {
         const tr = tbody.insertRow();
@@ -135,7 +143,6 @@
           td.textContent = cell;
         });
       });
-
       tableWrap.innerHTML = "";
       tableWrap.appendChild(table);
     }
@@ -144,14 +151,12 @@
       const pagination = document.getElementById('pagination');
       pagination.innerHTML = "";
       const totalPages = Math.ceil(filteredRows.length / ROWS_PER_PAGE);
-
       const prevBtn = document.createElement('button');
       prevBtn.textContent = "Prev";
       prevBtn.disabled = currentPage === 1;
       prevBtn.className = prevBtn.disabled ? "disabled" : "";
       prevBtn.onclick = () => { if (currentPage > 1) { currentPage--; renderTable(); renderPagination(); } };
       pagination.appendChild(prevBtn);
-
       for (let i = 1; i <= totalPages; i++) {
         const btn = document.createElement('button');
         btn.textContent = i;
@@ -159,7 +164,6 @@
         btn.onclick = () => { currentPage = i; renderTable(); renderPagination(); };
         pagination.appendChild(btn);
       }
-
       const nextBtn = document.createElement('button');
       nextBtn.textContent = "Next";
       nextBtn.disabled = currentPage === totalPages;
@@ -187,13 +191,11 @@
     async function init() {
       await fetchDropdown();
       await fetchSheet();
+      applyFilters();
     }
 
     init();
-    setInterval(async () => {
-      await fetchSheet();
-      applyFilters();
-    }, REFRESH_INTERVAL);
+    setInterval(init, REFRESH_INTERVAL);
   </script>
 </body>
 </html>
